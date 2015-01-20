@@ -278,13 +278,16 @@ func unmarshalValue(d *Decoder, v reflect.Value) error {
 //------------------------------------------------------------------------------
 
 type structCache struct {
-	l sync.RWMutex
-	m map[reflect.Type]fields
+	l   sync.RWMutex
+	m   map[reflect.Type]fields
+	e   map[reflect.Type]encoderFunc
+	ext *Extensions
 }
 
 func newStructCache() *structCache {
 	return &structCache{
 		m: make(map[reflect.Type]fields),
+		e: make(map[reflect.Type]encoderFunc),
 	}
 }
 
@@ -293,19 +296,19 @@ func (m *structCache) Fields(typ reflect.Type) fields {
 	fs, ok := m.m[typ]
 	m.l.RUnlock()
 	if !ok {
-		m.l.Lock()
 		fs, ok = m.m[typ]
 		if !ok {
-			fs = getFields(typ)
-			m.m[typ] = fs
+			fs = m.getFields(typ)
 		}
+		m.l.Lock()
+		m.m[typ] = fs
 		m.l.Unlock()
 	}
 
 	return fs
 }
 
-func getFields(typ reflect.Type) fields {
+func (m *structCache) getFields(typ reflect.Type) fields {
 	numField := typ.NumField()
 	fs := make(fields, numField)
 	for i := 0; i < numField; i++ {
@@ -328,18 +331,14 @@ func getFields(typ reflect.Type) fields {
 			index:     f.Index,
 			omitEmpty: opts.Contains("omitempty"),
 
-			encoder: getEncoder(fieldTyp),
-			decoder: getDecoder(fieldTyp),
+			encoder: m.getEncoder(fieldTyp),
+			decoder: m.getDecoder(fieldTyp),
 		}
 	}
 	return fs
 }
 
-func getEncoder(typ reflect.Type) encoderFunc {
-	if encoder, ok := typEncMap[typ]; ok {
-		return encoder
-	}
-
+func (m *structCache) getTypeEncoder(typ reflect.Type) encoderFunc {
 	if typ.Implements(marshalerType) {
 		return marshalValue
 	}
@@ -356,7 +355,29 @@ func getEncoder(typ reflect.Type) encoderFunc {
 	return valueEncoders[kind]
 }
 
-func getDecoder(typ reflect.Type) decoderFunc {
+func (m *structCache) getEncoder(typ reflect.Type) encoderFunc {
+	m.l.RLock()
+	encoder, ok := m.e[typ]
+	m.l.RUnlock()
+	if ok {
+		return encoder
+	}
+
+	encoder, ok = typEncMap[typ]
+	if !ok {
+		encoder = m.getTypeEncoder(typ)
+	}
+	if m.ext != nil {
+		encoder = m.ext.getEncoder(encoder)
+	}
+	m.l.Lock()
+	m.e[typ] = encoder
+	m.l.Unlock()
+	return encoder
+
+}
+
+func (m *structCache) getDecoder(typ reflect.Type) decoderFunc {
 	if decoder, ok := typDecMap[typ]; ok {
 		return decoder
 	}
@@ -371,6 +392,14 @@ func getDecoder(typ reflect.Type) decoderFunc {
 		elemKind := typ.Elem().Kind()
 		if dec := sliceDecoders[elemKind]; dec != nil {
 			return dec
+		}
+	case reflect.Ptr:
+		fallthrough
+	case reflect.Struct:
+		if m.ext != nil {
+			if decoder, ok := m.ext.decTypeMap[typ]; ok {
+				return decoder
+			}
 		}
 	}
 

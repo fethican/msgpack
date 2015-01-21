@@ -99,6 +99,8 @@ func (e *Encoder) encode(iv interface{}) error {
 		return e.encodeStringSlice(v)
 	case map[string]string:
 		return e.encodeMapStringString(v)
+	case *RawMessage:
+		return e.encodeRawMessage(v)
 	case time.Duration:
 		return e.EncodeInt64(int64(v))
 	case time.Time:

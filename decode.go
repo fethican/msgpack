@@ -60,6 +60,11 @@ func (d *Decoder) Decode(v ...interface{}) error {
 func (d *Decoder) decode(iv interface{}) error {
 	var err error
 	switch v := iv.(type) {
+	case *RawMessage:
+		if v != nil {
+			*v, err = d.DecodeRawMessage()
+			return err
+		}
 	case *string:
 		if v != nil {
 			*v, err = d.DecodeString()

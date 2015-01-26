@@ -6,33 +6,33 @@ import (
 )
 
 type RawMessage struct {
-	raw        []byte
-	extensions *Extensions
+	raw []byte
+	m   *structCache
 }
 
 func (r RawMessage) Decode(v ...interface{}) error {
 	w := bytes.NewReader(r.raw)
 	decoder := NewDecoder(w)
-	decoder.AddExtensions(r.extensions)
+	decoder.m = r.m
 	return decoder.Decode(v...)
 }
 
-func (r *RawMessage) copyRawMessage(target *Extensions) (*RawMessage, error) {
+func (r *RawMessage) copyRawMessage(m *structCache) (*RawMessage, error) {
 	buf := bytes.NewBuffer(make([]byte, 0, len(r.raw)))
-	if err := r.copyToWriter(buf, target); err != nil {
+	if err := r.copyToWriter(buf, m); err != nil {
 		return nil, fmt.Errorf("Error copying: %s, with content %#v", err, buf.Bytes())
 
 	}
 
 	return &RawMessage{
-		raw:        buf.Bytes(),
-		extensions: target,
+		raw: buf.Bytes(),
+		m:   m,
 	}, nil
 }
 
-func (r *RawMessage) copyToWriter(w writer, target *Extensions) error {
+func (r *RawMessage) copyToWriter(w writer, m *structCache) error {
 	decoder := NewDecoder(bytes.NewReader(r.raw))
-	decoder.AddExtensions(r.extensions)
+	decoder.m = r.m
 
 	// Create extension copier
 	extCopy := func(b byte, aw writer) error {
@@ -46,7 +46,7 @@ func (r *RawMessage) copyToWriter(w writer, target *Extensions) error {
 		}
 
 		encoder := NewEncoder(aw)
-		encoder.AddExtensions(target)
+		encoder.m = m
 
 		return encoder.Encode(v)
 	}
@@ -62,7 +62,7 @@ func (d *Decoder) DecodeRawMessage() (RawMessage, error) {
 		return RawMessage{}, fmt.Errorf("Error copying: %s, with content %#v", err, w.Bytes())
 	}
 
-	return RawMessage{raw: w.Bytes(), extensions: d.m.ext}, nil
+	return RawMessage{raw: w.Bytes(), m: d.m}, nil
 }
 
 func iterN(n int) []struct{} {
@@ -198,7 +198,7 @@ func (d *Decoder) copyIntoBuffer(w writer, extCopy func(byte, writer) error) err
 	case uint64Code, int64Code, doubleCode:
 		return d.copyNBytes(w, 8)
 	case bin8Code, str8Code:
-		l, err := d.r.ReadByte()
+		l, err := d.copyLen8(w)
 		if err != nil {
 			return err
 		}
@@ -263,5 +263,5 @@ func (d *Decoder) copyIntoBuffer(w writer, extCopy func(byte, writer) error) err
 }
 
 func (e *Encoder) encodeRawMessage(r *RawMessage) error {
-	return r.copyToWriter(e.w, e.m.ext)
+	return r.copyToWriter(e.w, e.m)
 }

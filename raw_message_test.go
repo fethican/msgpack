@@ -118,3 +118,49 @@ func TestEncode(t *testing.T) {
 	}
 
 }
+
+type mapStruct struct {
+	Key1 string
+	Key2 string
+}
+
+func TestRawMap(t *testing.T) {
+	var encoded []byte
+	{
+		m := map[string]string{
+			"Key1": "Key1's value",
+			"Key2": "Key2's value",
+		}
+		buf := bytes.NewBuffer(nil)
+		encoder := NewEncoder(buf)
+		if err := encoder.Encode(&m); err != nil {
+			t.Fatalf("Error encoding counter: %s", err)
+		}
+		encoded = buf.Bytes()
+	}
+
+	{
+		var empty interface{}
+		decoder := NewDecoder(bytes.NewReader(encoded))
+		decoder.DecodeMapFunc = DecodeMapToRaw
+		if err := decoder.Decode(&empty); err != nil {
+			t.Fatalf("Error decoding counter: %s\n\t%x", err, encoded)
+		}
+		raw, ok := empty.(RawMessage)
+		if !ok {
+			t.Fatalf("Unexpected decode type: %T", empty)
+		}
+		var s mapStruct
+		if err := raw.Decode(&s); err != nil {
+			t.Fatalf("Error decoding raw message: %s", err)
+		}
+
+		if expected := "Key1's value"; s.Key1 != expected {
+			t.Fatalf("Unexpected value for Key1:\n\tExpected: %s\n\tActual: %s", expected, s.Key1)
+		}
+
+		if expected := "Key2's value"; s.Key2 != expected {
+			t.Fatalf("Unexpected value for Key2:\n\tExpected: %s\n\tActual: %s", expected, s.Key2)
+		}
+	}
+}

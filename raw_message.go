@@ -8,31 +8,21 @@ import (
 type RawMessage struct {
 	raw []byte
 	m   *structCache
+	mf  func(*Decoder) (interface{}, error)
 }
 
 func (r RawMessage) Decode(v ...interface{}) error {
 	w := bytes.NewReader(r.raw)
 	decoder := NewDecoder(w)
 	decoder.m = r.m
+	decoder.DecodeMapFunc = r.mf
 	return decoder.Decode(v...)
-}
-
-func (r *RawMessage) copyRawMessage(m *structCache) (*RawMessage, error) {
-	buf := bytes.NewBuffer(make([]byte, 0, len(r.raw)))
-	if err := r.copyToWriter(buf, m); err != nil {
-		return nil, fmt.Errorf("Error copying: %s, with content %#v", err, buf.Bytes())
-
-	}
-
-	return &RawMessage{
-		raw: buf.Bytes(),
-		m:   m,
-	}, nil
 }
 
 func (r *RawMessage) copyToWriter(w writer, m *structCache) error {
 	decoder := NewDecoder(bytes.NewReader(r.raw))
 	decoder.m = r.m
+	decoder.DecodeMapFunc = r.mf
 
 	// Create extension copier
 	extCopy := func(b byte, aw writer) error {
@@ -62,7 +52,7 @@ func (d *Decoder) DecodeRawMessage() (RawMessage, error) {
 		return RawMessage{}, fmt.Errorf("Error copying: %s, with content %#v", err, w.Bytes())
 	}
 
-	return RawMessage{raw: w.Bytes(), m: d.m}, nil
+	return RawMessage{raw: w.Bytes(), m: d.m, mf: d.DecodeMapFunc}, nil
 }
 
 func iterN(n int) []struct{} {
@@ -264,4 +254,8 @@ func (d *Decoder) copyIntoBuffer(w writer, extCopy func(byte, writer) error) err
 
 func (e *Encoder) encodeRawMessage(r *RawMessage) error {
 	return r.copyToWriter(e.w, e.m)
+}
+
+func DecodeMapToRaw(d *Decoder) (interface{}, error) {
+	return d.DecodeRawMessage()
 }

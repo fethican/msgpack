@@ -150,11 +150,6 @@ func (d *Decoder) decode(iv interface{}) error {
 			*v = time.Duration(vv)
 			return err
 		}
-	case *time.Time:
-		if v != nil {
-			*v, err = d.DecodeTime()
-			return err
-		}
 	}
 
 	v := reflect.ValueOf(iv)

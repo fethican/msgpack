@@ -103,8 +103,6 @@ func (e *Encoder) encode(iv interface{}) error {
 		return e.encodeRawMessage(v)
 	case time.Duration:
 		return e.EncodeInt64(int64(v))
-	case time.Time:
-		return e.EncodeTime(v)
 	case Marshaler:
 		b, err := v.MarshalMsgpack()
 		if err != nil {

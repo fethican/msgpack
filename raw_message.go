@@ -3,6 +3,7 @@ package msgpack
 import (
 	"bytes"
 	"fmt"
+	"io"
 )
 
 type RawMessage struct {
@@ -49,6 +50,9 @@ func (d *Decoder) DecodeRawMessage() (RawMessage, error) {
 	w := bytes.NewBuffer(nil)
 
 	if err := d.copyIntoBuffer(w, d.rawExtCopy); err != nil {
+		if err == io.EOF {
+			return RawMessage{}, err
+		}
 		return RawMessage{}, fmt.Errorf("Error copying: %s, with content %#v", err, w.Bytes())
 	}
 
@@ -62,10 +66,16 @@ func iterN(n int) []struct{} {
 func (d *Decoder) copyNBytes(w writer, n int) error {
 	b, err := d.readN(n)
 	if err != nil {
+		if err == io.EOF {
+			return err
+		}
 		return fmt.Errorf("Error reading %d bytes: %s", n, err)
 	}
 	_, err = w.Write(b)
 	if err != nil {
+		if err == io.EOF {
+			return err
+		}
 		return fmt.Errorf("Error copying %d bytes: %s", n, err)
 	}
 	return nil
@@ -74,6 +84,9 @@ func (d *Decoder) copyNBytes(w writer, n int) error {
 func (d *Decoder) copyLen8(w writer) (int, error) {
 	b, err := d.r.ReadByte()
 	if err != nil {
+		if err == io.EOF {
+			return 0, err
+		}
 		return 0, fmt.Errorf("Error copying len(16): %s", err)
 	}
 	return int(b), w.WriteByte(b)
@@ -82,6 +95,9 @@ func (d *Decoder) copyLen8(w writer) (int, error) {
 func (d *Decoder) copyLen16(w writer) (int, error) {
 	b, err := d.readN(2)
 	if err != nil {
+		if err == io.EOF {
+			return 0, err
+		}
 		return 0, fmt.Errorf("Error copying len(16): %s", err)
 	}
 	_, err = w.Write(b)
@@ -91,6 +107,9 @@ func (d *Decoder) copyLen16(w writer) (int, error) {
 func (d *Decoder) copyLen32(w writer) (int, error) {
 	b, err := d.readN(4)
 	if err != nil {
+		if err == io.EOF {
+			return 0, err
+		}
 		return 0, fmt.Errorf("Error copying len(32): %s", err)
 	}
 	_, err = w.Write(b)
@@ -142,6 +161,9 @@ func (d *Decoder) rawExtCopy(b byte, w writer) error {
 func (d *Decoder) copyIntoBuffer(w writer, extCopy func(byte, writer) error) error {
 	b, err := d.r.ReadByte()
 	if err != nil {
+		if err == io.EOF {
+			return err
+		}
 		return fmt.Errorf("Error reading first byte: %s", err)
 	}
 	if (b >= ext8Code && b <= ext32Code) || (b >= fixExt1Code && b <= fixExt16Code) {
@@ -157,6 +179,9 @@ func (d *Decoder) copyIntoBuffer(w writer, extCopy func(byte, writer) error) err
 	if b <= fixMapHighCode {
 		for _ = range iterN(int(b&fixMapMask) * 2) {
 			if err := d.copyIntoBuffer(w, extCopy); err != nil {
+				if err == io.EOF {
+					return err
+				}
 				return fmt.Errorf("Error copying map object: %s", err)
 			}
 		}
@@ -165,6 +190,9 @@ func (d *Decoder) copyIntoBuffer(w writer, extCopy func(byte, writer) error) err
 	if b <= fixArrayHighCode {
 		for _ = range iterN(int(b & fixArrayMask)) {
 			if err := d.copyIntoBuffer(w, extCopy); err != nil {
+				if err == io.EOF {
+					return err
+				}
 				return fmt.Errorf("Error copying array value: %s", err)
 			}
 		}
@@ -212,6 +240,9 @@ func (d *Decoder) copyIntoBuffer(w writer, extCopy func(byte, writer) error) err
 		}
 		for _ = range iterN(l) {
 			if err := d.copyIntoBuffer(w, extCopy); err != nil {
+				if err == io.EOF {
+					return err
+				}
 				return fmt.Errorf("Error copying array value: %s", err)
 			}
 		}
@@ -222,6 +253,9 @@ func (d *Decoder) copyIntoBuffer(w writer, extCopy func(byte, writer) error) err
 		}
 		for _ = range iterN(l) {
 			if err := d.copyIntoBuffer(w, extCopy); err != nil {
+				if err == io.EOF {
+					return err
+				}
 				return fmt.Errorf("Error copying array value: %s", err)
 			}
 		}
@@ -232,6 +266,9 @@ func (d *Decoder) copyIntoBuffer(w writer, extCopy func(byte, writer) error) err
 		}
 		for _ = range iterN(l * 2) {
 			if err := d.copyIntoBuffer(w, extCopy); err != nil {
+				if err == io.EOF {
+					return err
+				}
 				return fmt.Errorf("Error copying map object: %s", err)
 			}
 		}
@@ -242,6 +279,9 @@ func (d *Decoder) copyIntoBuffer(w writer, extCopy func(byte, writer) error) err
 		}
 		for _ = range iterN(l * 2) {
 			if err := d.copyIntoBuffer(w, extCopy); err != nil {
+				if err == io.EOF {
+					return err
+				}
 				return fmt.Errorf("Error copying map object: %s", err)
 			}
 		}

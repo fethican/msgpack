@@ -314,7 +314,7 @@ func (m *structCache) getFields(typ reflect.Type) fields {
 	for i := 0; i < numField; i++ {
 		f := typ.Field(i)
 
-		if f.PkgPath != "" {
+		if f.PkgPath != "" && !f.Anonymous {
 			continue
 		}
 

@@ -13,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	msgpack2 "github.com/ugorji/go-msgpack"
 	"github.com/ugorji/go/codec"
 	. "gopkg.in/check.v1"
 
